@@ -30,8 +30,39 @@ if len(sys.argv) > 1:
     art = np.array(Image.open(sys.argv[1]).convert('RGB')).astype(float)
 K, TX, TY = 1.185, 86.0, 106.0
 REFS = {'plain': (128, 92, 62), 'grey': (72, 52, 35), 'dark': (70, 31, 4), 'orange': (175, 100, 6)}
+REF_KEYS = list(REFS)
+SMALL = 500   # pièces plus petites : couleur = voisin majoritaire (éclats aux points de tangence)
+# Corrections manuelles éventuelles : (x, y) en coordonnées plateau -> couleur
+OVERRIDES = []
+
+def sample_shade(m):
+    """Couleur d'une pièce : médiane des pixels intérieurs de l'artwork (bord érodé,
+    traits noirs et gravures exclus), puis référence la plus proche."""
+    dt = ndimage.distance_transform_edt(m)
+    for margin in (4 * S, 2.5 * S, 1.5 * S, 0.5):
+        sel = dt > margin
+        if sel.sum() >= 30: break
+    sy, sx = np.nonzero(sel)
+    if len(sx) > 20000:
+        idx = np.random.default_rng(0).choice(len(sx), 20000, replace=False); sx, sy = sx[idx], sy[idx]
+    px = (X0 + (sx + .5) / S) * K + TX; py = (Y0 + (sy + .5) / S) * K + TY
+    rgb = art[py.astype(int), px.astype(int)]
+    rgb = rgb[rgb.max(axis=1) > 40]
+    if not len(rgb): return 'plain'
+    return classify_median(np.median(rgb, axis=0))
+
+def classify_median(med):
+    """Règles calibrées sur les pièces à lettres (couleurs connues) :
+    orange = rouge vif peu de bleu ; neutre = bois clair ; brun foncé = très peu de bleu ; sinon gris-brun."""
+    r, g, b = med
+    ratio = b / max(r, 1)
+    if r >= 120 and ratio < 0.30: return 'orange'
+    if r >= 105: return 'plain'
+    if ratio < 0.34: return 'dark'
+    return 'grey'
 
 cells = []
+cell_masks = []
 for s in np.unique(sig):
     if s < 0: continue
     lab, n = ndimage.label(sig == s)
@@ -56,22 +87,28 @@ for s in np.unique(sig):
             ap = measure.approximate_polygon(ct, tolerance=0.45)
             pts = [(round(X0 + (p[1] - 1 + 0.5) / S, 1), round(Y0 + (p[0] - 1 + 0.5) / S, 1)) for p in ap]
             parts.append('M' + ' '.join(f'{a},{b}' for a, b in pts) + 'Z')
-        shade = 'plain'
+        shade = 'plain'; forced = False
         if art is not None:
-            # échantillon : pixels de la cellule loin des bords
-            dt = ndimage.distance_transform_edt(m)
-            sel = dt > max(3, dt.max() * 0.35)
-            sy, sx = np.nonzero(sel)
-            if len(sx) > 4000:
-                idx = np.random.default_rng(0).choice(len(sx), 4000, replace=False); sx, sy = sx[idx], sy[idx]
-            px = (X0 + (sx + .5) / S) * K + TX; py = (Y0 + (sy + .5) / S) * K + TY
-            rgb = art[py.astype(int), px.astype(int)]
-            rgb = rgb[rgb.max(axis=1) > 45]  # ignore les traits noirs et lettres gravées
-            if len(rgb):
-                med = np.median(rgb, axis=0)
-                shade = min(REFS, key=lambda r: sum((med[i] - REFS[r][i]) ** 2 for i in range(3)))
-        cells.append(dict(cx=round(cx, 2), cy=round(cy, 2), lx=round(lx, 1), ly=round(ly, 1), area=round(area, 1), d=''.join(parts), shade=shade, sig=int(s)))
+            shade = sample_shade(m)
+        for (ox, oy, sh) in OVERRIDES:
+            jx, jy = int((ox - X0) * S), int((oy - Y0) * S)
+            if 0 <= jy < H and 0 <= jx < W and m[jy, jx]: shade = sh; forced = True
+        cell_masks.append(m)
+        cells.append(dict(cx=round(cx, 2), cy=round(cy, 2), lx=round(lx, 1), ly=round(ly, 1), area=round(area, 1), d=''.join(parts), shade=shade, sig=int(s), forced=forced))
 
+# petites pièces : couleur du voisin avec le plus long contact (hors autres petites pièces)
+lab_img = np.full((H, W), -1, np.int32)
+for i, m in enumerate(cell_masks): lab_img[m] = i
+for i, (c, m) in enumerate(zip(cells, cell_masks)):
+    if c['area'] >= SMALL or c.get('forced'): continue
+    ring = ndimage.binary_dilation(m, iterations=3 * S) & ~m
+    ids, cnt = np.unique(lab_img[ring], return_counts=True)
+    votes = {}
+    for j, n in zip(ids, cnt):
+        if j < 0 or cells[j]['area'] < SMALL: continue
+        votes[cells[j]['shade']] = votes.get(cells[j]['shade'], 0) + n
+    if votes: c['shade'] = max(votes, key=votes.get)
+for c in cells: c.pop('forced', None)
 cells.sort(key=lambda c: (round(c['cy'] / 10), c['cx']))
 for i, c in enumerate(cells): c['id'] = i
 print('cellules :', len(cells))
