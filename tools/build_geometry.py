@@ -1,0 +1,112 @@
+"""Génère assets/geometry.js : cellules (pièces) de l'arrangement de cercles « fleur de vie »,
+cercles rotatifs, pas de rotation vérifié et permutation des cellules.
+Usage : python tools/build_geometry.py [chemin_image_originale]"""
+import math, json, sys, os
+import numpy as np
+from scipy import ndimage
+from skimage import measure
+from PIL import Image
+HERE = os.path.dirname(os.path.abspath(__file__))
+exec(open(os.path.join(HERE, 'model.py')).read())  # -> circles, h, OX, OY
+
+S = 2                       # sur-échantillonnage
+X0, Y0, X1, Y1 = 0, 150, 1024, 845
+W, H = (X1 - X0) * S, (Y1 - Y0) * S
+ys, xs = np.mgrid[0:H, 0:W]
+X = X0 + (xs + 0.5) / S
+Y = Y0 + (ys + 0.5) / S
+inside_any = np.zeros((H, W), bool)
+for c in circles:
+    if c[1] == 'grand':
+        inside_any |= (X - c[2]) ** 2 + (Y - c[3]) ** 2 < c[4] ** 2
+sig = np.zeros((H, W), np.int64)
+for b, c in enumerate(circles):
+    sig |= (((X - c[2]) ** 2 + (Y - c[3]) ** 2 < c[4] ** 2).astype(np.int64) << b)
+sig[~inside_any] = -1
+
+# image d'origine pour l'échantillonnage des couleurs
+art = None
+if len(sys.argv) > 1:
+    art = np.array(Image.open(sys.argv[1]).convert('RGB')).astype(float)
+K, TX, TY = 1.185, 86.0, 106.0
+REFS = {'plain': (128, 92, 62), 'grey': (72, 52, 35), 'dark': (70, 31, 4), 'orange': (175, 100, 6)}
+
+cells = []
+for s in np.unique(sig):
+    if s < 0: continue
+    lab, n = ndimage.label(sig == s)
+    for k in range(1, n + 1):
+        m = lab == k
+        area = m.sum() / S / S
+        if area < 8: continue
+        yy, xx = np.nonzero(m)
+        cx = X0 + (xx.mean() + 0.5) / S; cy = Y0 + (yy.mean() + 0.5) / S
+        # point d'étiquette : centre de gravité si dans la cellule, sinon max de distance au bord
+        ix, iy = int((cx - X0) * S), int((cy - Y0) * S)
+        if 0 <= iy < H and 0 <= ix < W and m[iy, ix]:
+            lx, ly = cx, cy
+        else:
+            dt = ndimage.distance_transform_edt(m)
+            j = np.argmax(dt); lx = X0 + (j % W + 0.5) / S; ly = Y0 + (j // W + 0.5) / S
+        pad = np.pad(m, 1).astype(float)
+        conts = measure.find_contours(pad, 0.5)
+        parts = []
+        for ct in conts:
+            if len(ct) < 6: continue
+            ap = measure.approximate_polygon(ct, tolerance=0.45)
+            pts = [(round(X0 + (p[1] - 1 + 0.5) / S, 1), round(Y0 + (p[0] - 1 + 0.5) / S, 1)) for p in ap]
+            parts.append('M' + ' '.join(f'{a},{b}' for a, b in pts) + 'Z')
+        shade = 'plain'
+        if art is not None:
+            # échantillon : pixels de la cellule loin des bords
+            dt = ndimage.distance_transform_edt(m)
+            sel = dt > max(3, dt.max() * 0.35)
+            sy, sx = np.nonzero(sel)
+            if len(sx) > 4000:
+                idx = np.random.default_rng(0).choice(len(sx), 4000, replace=False); sx, sy = sx[idx], sy[idx]
+            px = (X0 + (sx + .5) / S) * K + TX; py = (Y0 + (sy + .5) / S) * K + TY
+            rgb = art[py.astype(int), px.astype(int)]
+            rgb = rgb[rgb.max(axis=1) > 45]  # ignore les traits noirs et lettres gravées
+            if len(rgb):
+                med = np.median(rgb, axis=0)
+                shade = min(REFS, key=lambda r: sum((med[i] - REFS[r][i]) ** 2 for i in range(3)))
+        cells.append(dict(cx=round(cx, 2), cy=round(cy, 2), lx=round(lx, 1), ly=round(ly, 1), area=round(area, 1), d=''.join(parts), shade=shade, sig=int(s)))
+
+cells.sort(key=lambda c: (round(c['cy'] / 10), c['cx']))
+for i, c in enumerate(cells): c['id'] = i
+print('cellules :', len(cells))
+
+def rot(x, y, cx, cy, deg):
+    a = math.radians(deg); dx, dy = x - cx, y - cy
+    return cx + dx * math.cos(a) - dy * math.sin(a), cy + dx * math.sin(a) + dy * math.cos(a)
+
+out_circles = []
+report = []
+for c in circles:
+    cid, fam, ccx, ccy, r, rotatable = c
+    if not rotatable: continue
+    mem = [cl for cl in cells if math.hypot(cl['cx'] - ccx, cl['cy'] - ccy) < r]
+    step, perm, worst = None, None, None
+    for st in (90, 180):
+        ok = True; pm = {}; w = 0
+        for cl in mem:
+            x, y = rot(cl['cx'], cl['cy'], ccx, ccy, st)
+            best = min(mem, key=lambda o: (o['cx'] - x) ** 2 + (o['cy'] - y) ** 2)
+            d = math.hypot(best['cx'] - x, best['cy'] - y)
+            w = max(w, d)
+            if d > 2.0 or abs(best['area'] - cl['area']) > 0.06 * cl['area'] + 3:
+                ok = False; break
+            pm[cl['id']] = best['id']
+        if ok and len(set(pm.values())) == len(pm):
+            step, perm, worst = st, pm, w; break
+    report.append((cid, fam, len(mem), step, worst))
+    out_circles.append(dict(id=cid, family=fam, cx=ccx, cy=ccy, r=round(r, 3), step=step,
+                            members=[m['id'] for m in mem], perm=[[a, b] for a, b in (perm or {}).items()]))
+for r_ in report: print(r_)
+arcs = [dict(id=c[0], family=c[1], cx=c[2], cy=c[3], r=c[4]) for c in circles if not c[5]]
+for c in cells: del c['sig']
+geo = dict(h=h, origin=[OX, OY], art=dict(k=K, tx=TX, ty=TY), circles=out_circles, arcs=arcs, cells=cells)
+dst = os.path.join(HERE, '..', 'assets', 'geometry.js')
+with open(dst, 'w') as f:
+    f.write('// Généré par tools/build_geometry.py — ne pas éditer à la main.\nwindow.GEOMETRY = ' + json.dumps(geo, separators=(',', ':')) + ';\n')
+print('écrit', dst, os.path.getsize(dst), 'octets')
