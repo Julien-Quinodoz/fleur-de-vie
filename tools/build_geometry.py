@@ -117,6 +117,37 @@ def rot(x, y, cx, cy, deg):
     a = math.radians(deg); dx, dy = x - cx, y - cy
     return cx + dx * math.cos(a) - dy * math.sin(a), cy + dx * math.sin(a) + dy * math.cos(a)
 
+# Cercles moyens (rouges, bleus, central) : la géométrie n'a qu'une symétrie d'ordre 2, mais le jeu les fait
+# tourner par 90°. On construit un pas de 90° « au plus proche » : chaque paire échangée par le demi-tour
+# est associée à une autre paire en 4-cycle (couplage de poids minimal), de sorte que 2 pas = demi-tour exact
+# et 4 pas = identité. Les pièces atterrissent dans l'emplacement le plus proche (formes parfois différentes).
+FORCE90 = ('rouge', 'bleu', 'centre')
+def force90(mem, p180, ccx, ccy):
+    import networkx as nx
+    byid = {m['id']: m for m in mem}
+    def cost(a, b):
+        x, y = rot(byid[a]['cx'], byid[a]['cy'], ccx, ccy, 90)
+        return math.hypot(byid[b]['cx'] - x, byid[b]['cy'] - y)
+    pairs, seen, perm = [], set(), {}
+    for m in mem:
+        a = m['id']
+        if p180[a] == a: perm[a] = a; continue
+        if a in seen: continue
+        pairs.append((a, p180[a])); seen |= {a, p180[a]}
+    g, orient = nx.Graph(), {}
+    for i, (a, a2) in enumerate(pairs):
+        for j in range(i + 1, len(pairs)):
+            b, b2 = pairs[j]
+            o1 = cost(a, b) + cost(b, a2) + cost(a2, b2) + cost(b2, a)
+            o2 = cost(a, b2) + cost(b2, a2) + cost(a2, b) + cost(b, a)
+            orient[(i, j)] = o1 <= o2; g.add_edge(i, j, weight=-min(o1, o2))
+    for i, j in nx.max_weight_matching(g, maxcardinality=True):
+        i, j = min(i, j), max(i, j); (a, a2), (b, b2) = pairs[i], pairs[j]
+        if not orient[(i, j)]: b, b2 = b2, b
+        perm.update({a: b, b: a2, a2: b2, b2: a})
+    bad = sum(1 for a, b in perm.items() if cost(a, b) > 2.0 or abs(byid[a]['area'] - byid[b]['area']) > 0.06 * byid[a]['area'] + 3)
+    return perm, bad
+
 out_circles = []
 report = []
 for c in circles:
@@ -136,9 +167,13 @@ for c in circles:
             pm[cl['id']] = best['id']
         if ok and len(set(pm.values())) == len(pm):
             step, perm, worst = st, pm, w; break
-    report.append((cid, fam, len(mem), step, worst))
+    approx = 0
+    if step == 180 and fam in FORCE90:
+        perm, approx = force90(mem, perm, ccx, ccy); step = 90
+    report.append((cid, fam, len(mem), step, worst, approx))
     out_circles.append(dict(id=cid, family=fam, cx=ccx, cy=ccy, r=round(r, 3), step=step,
-                            members=[m['id'] for m in mem], perm=[[a, b] for a, b in (perm or {}).items()]))
+                            members=[m['id'] for m in mem], perm=[[a, b] for a, b in (perm or {}).items()],
+                            **({'approx': approx} if approx else {})))
 for r_ in report: print(r_)
 arcs = [dict(id=c[0], family=c[1], cx=c[2], cy=c[3], r=c[4]) for c in circles if not c[5]]
 for c in cells: del c['sig']
