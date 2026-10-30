@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Machine 10 – Les disques à lettres</title>
+<style>
+  :root { --bg:#f6efe6; --ink:#3b2412; --accent:#b4561a; --panel:#fffaf3; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; border-bottom:1px solid #e3d3bf; background:#fbf4ea; }
+  header h1 { font-size:18px; margin:0 16px 0 0; }
+  button { font:inherit; padding:7px 14px; border-radius:8px; border:1px solid #c9a985; background:#fff; color:var(--ink); cursor:pointer; }
+  button:hover { background:#f3e3cf; }
+  button:disabled { opacity:.45; cursor:default; }
+  label.tog { display:flex; align-items:center; gap:6px; font-size:14px; user-select:none; cursor:pointer; }
+  .counter { font-weight:600; padding:6px 12px; border-radius:8px; background:#3b2412; color:#fff; }
+  main { display:flex; flex-wrap:wrap; gap:16px; padding:16px; align-items:flex-start; }
+  #stage { flex: 1 1 640px; min-width:320px; max-width:1000px; }
+  #stage svg { width:100%; height:auto; display:block; touch-action: manipulation; }
+  aside { flex: 0 1 340px; background:var(--panel); border:1px solid #e3d3bf; border-radius:12px; padding:14px 16px; font-size:14px; }
+  aside h2 { font-size:15px; margin:14px 0 6px; }
+  aside h2:first-child { margin-top:0; }
+  .row { font-family: "Courier New", monospace; font-size:22px; letter-spacing:2px; margin:3px 0; display:flex; gap:2px; align-items:center; }
+  .row .sep { width:10px; }
+  .row .lab { font-family: system-ui, sans-serif; font-size:11px; color:#8a6a4c; width:62px; letter-spacing:0; }
+  .lt { display:inline-block; width:22px; text-align:center; font-weight:700; transition: transform .3s; }
+  .lt.up { color:#2d7a2d; }
+  .lt.empty { color:#c7b29a; }
+  .hint { color:#7a5c40; font-size:12.5px; line-height:1.45; }
+  .piece { cursor:pointer; }
+  .letter { font-family: "Trebuchet MS", "DejaVu Sans", Verdana, sans-serif; font-weight:700; font-size:40px; fill:#4a2a12; pointer-events:none;
+            paint-order: stroke; stroke:#f7d8b0; stroke-width:1.2px; }
+  .letter.upHL { fill:#1f6e1f; }
+  .bigHandle { cursor:pointer; }
+  .bigHandle:hover circle { fill:#f3e3cf; }
+  kbd { background:#eee; border:1px solid #ccc; border-radius:3px; padding:0 4px; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚙️ Machine 10</h1>
+  <button id="btnReset" title="Revenir à l'état de la photo">Réinitialiser</button>
+  <button id="btnUndo" title="Annuler le dernier mouvement (Ctrl+Z)">Annuler</button>
+  <span class="counter">Coups : <span id="moves">0</span></span>
+  <label class="tog"><input type="checkbox" id="chkUpright"> Lettres toujours droites</label>
+  <label class="tog"><input type="checkbox" id="chkHL" checked> Surligner les lettres à l'endroit</label>
+  <label class="tog"><input type="checkbox" id="chkBig" checked> Grands cercles rotatifs</label>
+</header>
+<main>
+  <div id="stage"></div>
+  <aside>
+    <h2>Lecture des disques (ligne par ligne)</h2>
+    <div id="rows"></div>
+    <h2>Pétales (sens horaire, depuis le haut)</h2>
+    <div id="petals"></div>
+    <h2>Lettres à l'endroit : <span id="uprightCount"></span></h2>
+    <p class="hint">
+      <b>Clic</b> sur un petit disque : rotation de 90° (sens horaire).<br>
+      <b>Maj+clic</b> ou <b>clic droit</b> : sens inverse.<br>
+      <b>Clic</b> sur un pétale ou une zone libre d'un grand cercle (ou sur les flèches ↻ ↺) : le grand cercle tourne de 90° en emportant ses 4 disques et ses pétales. Les disques du milieu sont partagés entre les deux grands cercles.<br>
+      <b>Ctrl+Z</b> : annuler.<br><br>
+      Indice : l'orientation des lettres semble être la clé — on cherche sans doute la position où toutes les lettres sont à l'endroit (en vert).
+    </p>
+  </aside>
+</main>
+
+<script>
+/* =====================================================================
+   CONFIGURATION – état de la photo.  Corrige ici une lettre si besoin.
+   rot   = rotation de la lettre en degrés (sens horaire), 0 = à l'endroit,
+           90 = couchée vers la droite, 180 = à l'envers, -90 = couchée vers la gauche
+   shade = 'light' (bois clair), 'grey' (brun-gris), 'orange' (orange foncé)
+   ===================================================================== */
+const CONFIG = {
+  board: { width: 1024, height: 1000 },
+  bigRadius: 335,
+  discRadius: 95,
+  animMs: 420,
+  // Les deux grands cercles. discSlots dans l'ordre horaire.
+  bigCircles: {
+    G: { name: 'Cercle gauche', cx: 343, cy: 497, discSlots: ['TL', 'TC', 'BC', 'BL'] },
+    D: { name: 'Cercle droit',  cx: 678, cy: 497, discSlots: ['TC', 'TR', 'BR', 'BC'] },
+  },
+  // Les 6 petits disques. Quadrants dans l'ordre : [haut-gauche, haut-droite, bas-droite, bas-gauche]
+  discs: {
+    TL: [ {l:'P', rot:0,   shade:'grey'},  {l:'U', rot:180, shade:'grey'},  {l:'M', rot:180, shade:'light'}, {l:'D', rot:180, shade:'light'} ],
+    TC: [ {l:'R', rot:0,   shade:'grey'},  {l:'N', rot:90,  shade:'grey'},  {l:'E', rot:180, shade:'orange'},{l:'S', rot:0,   shade:'orange'} ],
+    TR: [ {l:'T', rot:0,   shade:'orange'},{l:'E', rot:0,   shade:'orange'},{l:'E', rot:90,  shade:'light'}, {l:'O', rot:90,  shade:'light'} ],
+    BL: [ {l:'F', rot:90,  shade:'light'}, {l:'P', rot:0,   shade:'grey'},  {l:'G', rot:180, shade:'light'}, {l:'E', rot:180, shade:'light'} ],
+    BC: [ {l:'O', rot:90,  shade:'grey'},  {l:'U', rot:0,   shade:'grey'},  {l:'N', rot:0,   shade:'orange'},{l:'A', rot:180, shade:'orange'} ],
+    BR: [ {l:'R', rot:0,   shade:'light'}, {l:'L', rot:0,   shade:'light'}, {l:'R', rot:0,   shade:'light'}, {l:'O', rot:90,  shade:'light'} ],
+  },
+  // Pétales : 8 emplacements par grand cercle, angle écran (0 = droite, 90 = bas, 180 = gauche, 270 = haut).
+  // l:'' = pétale sans lettre.
+  petals: {
+    G259: {l:'A', rot:-90, shade:'grey'},   G281: {l:'S', rot:-90, shade:'grey'},
+    G349: {l:'',  rot:0,   shade:'light'},  G11:  {l:'Q', rot:90,  shade:'grey'},
+    G79:  {l:'D', rot:0,   shade:'orange'}, G101: {l:'I', rot:0,   shade:'light'},
+    G169: {l:'T', rot:90,  shade:'grey'},   G191: {l:'',  rot:0,   shade:'light'},
+    D259: {l:'O', rot:90,  shade:'orange'}, D281: {l:'I', rot:90,  shade:'orange'},
+    D349: {l:'E', rot:-90, shade:'light'},  D11:  {l:'V', rot:90,  shade:'orange'},
+    D79:  {l:'N', rot:90,  shade:'light'},  D101: {l:'U', rot:-90, shade:'light'},
+    D169: {l:'',  rot:0,   shade:'light'},  D191: {l:'',  rot:0,   shade:'light'},
+  },
+  shades: { light:'#efc394', grey:'#8e735c', orange:'#c35a17' },
+};
+/* ===================================================================== */
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+const R = CONFIG.bigRadius, RD = CONFIG.discRadius;
+const rad = d => d * Math.PI / 180;
+const norm = a => ((Math.round(a) % 360) + 360) % 360;
+const BIG = CONFIG.bigCircles;
+
+// Positions des emplacements de disques (à 45° des axes, à R/√2 du centre)
+const DISC_POS = {};
+for (const [cid, c] of Object.entries(BIG)) {
+  c.discSlots.forEach((s, i) => {
+    const ang = 225 + 90 * i; // TL=225, puis horaire
+    const p = { x: c.cx + (R / Math.SQRT2) * Math.cos(rad(ang)), y: c.cy + (R / Math.SQRT2) * Math.sin(rad(ang)) };
+    if (!DISC_POS[s]) DISC_POS[s] = p;
+  });
+}
+const PETAL_ANGLES = [259, 281, 349, 11, 79, 101, 169, 191];
+
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+function initialState() { return { discs: clone(CONFIG.discs), petals: clone(CONFIG.petals) }; }
+
+let state = initialState();
+let history = [];
+let animating = false, queue = [];
+let anim = null; // {kind, id, dir, t}
+
+// ---------- géométrie des pétales ----------
+function petalGeom(cid, ang) {
+  const c = BIG[cid];
+  const base = Math.round(ang / 90) * 90;
+  const side = (norm(ang - base) === 11) ? 1 : -1; // +11 ou -11
+  const p1 = { x: c.cx + R * Math.cos(rad(base)), y: c.cy + R * Math.sin(rad(base)) };
+  const a2 = base + side * 37, r2 = 0.66 * R;
+  const p2 = { x: c.cx + r2 * Math.cos(rad(a2)), y: c.cy + r2 * Math.sin(rad(a2)) };
+  const rho = 150;
+  const d = `M${p1.x},${p1.y} A${rho},${rho} 0 0 1 ${p2.x},${p2.y} A${rho},${rho} 0 0 1 ${p1.x},${p1.y} Z`;
+  const tx = c.cx + 0.835 * R * Math.cos(rad(ang)), ty = c.cy + 0.835 * R * Math.sin(rad(ang));
+  return { d, tx, ty };
+}
+
+// ---------- dessin ----------
+const stage = document.getElementById('stage');
+const svg = document.createElementNS(SVGNS, 'svg');
+svg.setAttribute('viewBox', `0 60 ${CONFIG.board.width} ${CONFIG.board.height - 120}`);
+stage.appendChild(svg);
+
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function buildStatic() {
+  const defs = el('defs', {}, svg);
+  // anneaux de bois
+  const g1 = el('radialGradient', { id: 'rings', cx: '0.5', cy: '0.5', r: '0.035', spreadMethod: 'repeat' }, defs);
+  el('stop', { offset: '0', 'stop-color': '#000', 'stop-opacity': '0' }, g1);
+  el('stop', { offset: '0.82', 'stop-color': '#000', 'stop-opacity': '0' }, g1);
+  el('stop', { offset: '0.92', 'stop-color': '#5a2a08', 'stop-opacity': '0.16' }, g1);
+  el('stop', { offset: '1', 'stop-color': '#000', 'stop-opacity': '0' }, g1);
+  const g2 = el('radialGradient', { id: 'warm', cx: '0.5', cy: '0.5', r: '0.6' }, defs);
+  el('stop', { offset: '0', 'stop-color': '#f8dcb8' }, g2);
+  el('stop', { offset: '1', 'stop-color': '#e3a46b' }, g2);
+  const f = el('filter', { id: 'engrave', x: '-20%', y: '-20%', width: '140%', height: '140%' }, defs);
+  el('feDropShadow', { dx: '1.2', dy: '1.6', stdDeviation: '0.8', 'flood-color': '#fff1dc', 'flood-opacity': '0.9' }, f);
+  const sh = el('filter', { id: 'shadow', x: '-10%', y: '-10%', width: '120%', height: '120%' }, defs);
+  el('feDropShadow', { dx: '0', dy: '4', stdDeviation: '6', 'flood-color': '#5a2a08', 'flood-opacity': '0.35' }, sh);
+  for (const [cid, c] of Object.entries(BIG)) {
+    const cp = el('clipPath', { id: 'clip' + cid }, defs);
+    el('circle', { cx: c.cx, cy: c.cy, r: R }, cp);
+  }
+
+  // planche (forme irrégulière)
+  let pts = [];
+  for (let i = 0; i <= 72; i++) {
+    const a = rad(i * 5);
+    const wob = 1 + 0.025 * Math.sin(i * 1.7) + 0.018 * Math.cos(i * 3.1);
+    pts.push([510 + 505 * Math.cos(a) * wob, 500 + 360 * Math.sin(a) * wob]);
+  }
+  el('path', { d: 'M' + pts.map(p => p.join(',')).join(' L') + ' Z', fill: '#f4d6b2', filter: 'url(#shadow)' }, svg);
+
+  for (const [cid, c] of Object.entries(BIG)) {
+    el('circle', { cx: c.cx, cy: c.cy, r: R, fill: 'url(#warm)', stroke: '#2b1708', 'stroke-width': 3, 'data-big': cid, class: 'bigbg' }, svg);
+  }
+  for (const [cid, c] of Object.entries(BIG)) {
+    const ring = el('circle', { cx: c.cx, cy: c.cy, r: R, fill: 'url(#rings)', 'pointer-events': 'none' }, svg);
+  }
+  // arcs décoratifs (motif symétrique à 90°, donc inchangé par les rotations)
+  const deco = el('g', { 'pointer-events': 'none', fill: 'none', stroke: '#2b1708', 'stroke-width': 1.6, opacity: 0.55 }, svg);
+  for (const [cid, c] of Object.entries(BIG)) {
+    const g = el('g', { 'clip-path': `url(#clip${cid})` }, deco);
+    for (let k = 0; k < 8; k++) {
+      const a = rad(45 * k);
+      el('circle', { cx: c.cx + R * Math.cos(a), cy: c.cy + R * Math.sin(a), r: R }, g);
+    }
+    for (let k = 0; k < 4; k++) {
+      const a = rad(90 * k);
+      el('circle', { cx: c.cx + R / 2 * Math.cos(a), cy: c.cy + R / 2 * Math.sin(a), r: R / 2 }, g);
+    }
+  }
+  for (const [cid, c] of Object.entries(BIG)) {
+    el('circle', { cx: c.cx, cy: c.cy, r: R, fill: 'none', stroke: '#2b1708', 'stroke-width': 3.5, 'pointer-events': 'none' }, svg);
+  }
+}
+
+const dyn = el('g', {}, null);
+const handles = el('g', {}, null);
+
+function letterEl(parent, x, y, item, animAngle) {
+  if (!item.l) return;
+  const upright = document.getElementById('chkUpright').checked;
+  const hl = document.getElementById('chkHL').checked && norm(item.rot) === 0;
+  const r = upright ? -animAngle : item.rot;
+  const t = el('text', { x, y, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'letter' + (hl ? ' upHL' : ''),
+    transform: `rotate(${r} ${x} ${y})`, filter: 'url(#engrave)' }, parent);
+  t.textContent = item.l;
+}
+
+function moving(kind, id) {
+  // renvoie l'angle d'animation appliqué à cette pièce
+  if (!anim) return 0;
+  const a = anim.dir * 90 * ease(anim.t);
+  if (anim.kind === 'disc') return (kind === 'disc' && id === anim.id) ? a : 0;
+  // grand cercle
+  const c = BIG[anim.id];
+  if (kind === 'disc' && c.discSlots.includes(id)) return a;
+  if (kind === 'petal' && id.startsWith(anim.id) && id.length > 1 && /^[GD]\d+$/.test(id) && id[0] === anim.id) return a;
+  return 0;
+}
+function pivot(kind, id) {
+  if (!anim) return null;
+  if (anim.kind === 'disc') return DISC_POS[anim.id];
+  return { x: BIG[anim.id].cx, y: BIG[anim.id].cy };
+}
+const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+function render() {
+  dyn.innerHTML = '';
+  // pétales
+  for (const cid of Object.keys(BIG)) {
+    for (const ang of PETAL_ANGLES) {
+      const id = cid + ang;
+      const item = state.petals[id];
+      const a = moving('petal', id), pv = pivot();
+      const g = el('g', { class: 'piece', 'data-petal': id }, dyn);
+      if (a && pv) g.setAttribute('transform', `rotate(${a} ${pv.x} ${pv.y})`);
+      const geo = petalGeom(cid, ang);
+      el('path', { d: geo.d, fill: CONFIG.shades[item.shade] || CONFIG.shades.light, 'fill-opacity': item.shade === 'light' ? 0.55 : 0.85,
+        stroke: '#2b1708', 'stroke-width': 2.2 }, g);
+      el('path', { d: geo.d, fill: 'url(#rings)', 'pointer-events': 'none' }, g);
+      letterEl(g, geo.tx, geo.ty, item, a);
+    }
+  }
+  // disques
+  for (const [sid, p] of Object.entries(DISC_POS)) {
+    const quads = state.discs[sid];
+    const a = moving('disc', sid), pv = pivot();
+    const g = el('g', { class: 'piece', 'data-disc': sid }, dyn);
+    if (a && pv) g.setAttribute('transform', `rotate(${a} ${pv.x} ${pv.y})`);
+    el('circle', { cx: p.x, cy: p.y, r: RD + 3, fill: '#2b1708', opacity: 0.25 }, g);
+    quads.forEach((q, i) => {
+      const a0 = 180 + 90 * i, a1 = a0 + 90;
+      const e0 = { x: p.x + RD * Math.cos(rad(a0)), y: p.y + RD * Math.sin(rad(a0)) };
+      const e1 = { x: p.x + RD * Math.cos(rad(a1)), y: p.y + RD * Math.sin(rad(a1)) };
+      const d = `M${p.x},${p.y} L${e0.x},${e0.y} A${RD},${RD} 0 0 1 ${e1.x},${e1.y} Z`;
+      el('path', { d, fill: CONFIG.shades[q.shade] || CONFIG.shades.light, stroke: 'none' }, g);
+      el('path', { d, fill: 'url(#rings)', 'pointer-events': 'none' }, g);
+    });
+    // séparateurs en lentille + contour
+    const lens = el('g', { fill: 'none', stroke: '#2b1708', 'stroke-width': 2, 'pointer-events': 'none' }, g);
+    const rr = RD * 1.7;
+    el('path', { d: `M${p.x},${p.y - RD} A${rr},${rr} 0 0 1 ${p.x},${p.y + RD} A${rr},${rr} 0 0 1 ${p.x},${p.y - RD}` }, lens);
+    el('path', { d: `M${p.x - RD},${p.y} A${rr},${rr} 0 0 1 ${p.x + RD},${p.y} A${rr},${rr} 0 0 1 ${p.x - RD},${p.y}` }, lens);
+    el('circle', { cx: p.x, cy: p.y, r: RD, 'stroke-width': 3 }, lens);
+    quads.forEach((q, i) => {
+      const ang = 225 + 90 * i;
+      letterEl(g, p.x + 0.56 * RD * Math.cos(rad(ang)), p.y + 0.56 * RD * Math.sin(rad(ang)), q, a);
+    });
+  }
+  updatePanel();
+}
+
+function buildHandles() {
+  for (const [cid, c] of Object.entries(BIG)) {
+    const y = c.cy + R + 42;
+    [[-1, '↺', -50], [1, '↻', 50]].forEach(([dir, sym, dx]) => {
+      const g = el('g', { class: 'bigHandle' }, handles);
+      el('circle', { cx: c.cx + dx, cy: y, r: 24, fill: '#fffaf3', stroke: '#8a5a32', 'stroke-width': 2 }, g);
+      const t = el('text', { x: c.cx + dx, y: y + 1, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 28, fill: '#3b2412' }, g);
+      t.textContent = sym;
+      const ti = el('title', {}, g); ti.textContent = c.name + (dir > 0 ? ' – sens horaire' : ' – sens anti-horaire');
+      g.addEventListener('click', e => { e.stopPropagation(); requestMove({ kind: 'big', id: cid, dir }); });
+    });
+  }
+}
+
+// ---------- logique ----------
+function applyMove(st, m) {
+  const d = m.dir; // +1 horaire, -1 anti-horaire
+  if (m.kind === 'disc') {
+    const q = st.discs[m.id];
+    const nq = new Array(4);
+    for (let i = 0; i < 4; i++) nq[(i + d + 4) % 4] = { ...q[i], rot: norm(q[i].rot + 90 * d) };
+    st.discs[m.id] = nq;
+  } else {
+    const c = BIG[m.id];
+    const slots = c.discSlots;
+    const old = slots.map(s => st.discs[s]);
+    slots.forEach((s, i) => {
+      const src = old[i];
+      const nq = new Array(4);
+      for (let k = 0; k < 4; k++) nq[(k + d + 4) % 4] = { ...src[k], rot: norm(src[k].rot + 90 * d) };
+      st.discs[slots[(i + d + 4) % 4]] = nq;
+    });
+    const oldP = {};
+    for (const a of PETAL_ANGLES) oldP[a] = st.petals[m.id + a];
+    for (const a of PETAL_ANGLES) {
+      const na = norm(a + 90 * d);
+      const it = oldP[a];
+      st.petals[m.id + na] = { ...it, rot: norm(it.rot + 90 * d) };
+    }
+  }
+}
+
+function requestMove(m, isUndo = false) {
+  if (m.kind === 'big' && !document.getElementById('chkBig').checked) return;
+  queue.push({ m, isUndo });
+  if (!animating) nextAnim();
+}
+function nextAnim() {
+  const job = queue.shift();
+  if (!job) { animating = false; return; }
+  animating = true;
+  anim = { kind: job.m.kind, id: job.m.id, dir: job.m.dir, t: 0 };
+  const start = performance.now();
+  function step(now) {
+    anim.t = Math.min(1, (now - start) / CONFIG.animMs);
+    render();
+    if (anim.t < 1) requestAnimationFrame(step);
+    else {
+      anim = null;
+      applyMove(state, job.m);
+      if (job.isUndo) history.pop(); else history.push(job.m);
+      render();
+      nextAnim();
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+function undo() {
+  if (animating || !history.length) return;
+  const m = history[history.length - 1];
+  requestMove({ ...m, dir: -m.dir }, true);
+}
+function reset() {
+  queue = []; anim = null; animating = false;
+  state = initialState(); history = []; render();
+}
+
+// ---------- panneau ----------
+function span(item) {
+  const upright = document.getElementById('chkUpright').checked;
+  if (!item || !item.l) return '<span class="lt empty">·</span>';
+  const up = norm(item.rot) === 0;
+  const r = upright ? 0 : item.rot;
+  return `<span class="lt${up ? ' up' : ''}" style="transform:rotate(${r}deg)">${item.l}</span>`;
+}
+function updatePanel() {
+  document.getElementById('moves').textContent = history.length;
+  document.getElementById('btnUndo').disabled = !history.length;
+  const D = state.discs;
+  const rows = [
+    ['Ligne 1', [D.TL[0], D.TL[1], null, D.TC[0], D.TC[1], null, D.TR[0], D.TR[1]]],
+    ['Ligne 2', [D.TL[3], D.TL[2], null, D.TC[3], D.TC[2], null, D.TR[3], D.TR[2]]],
+    ['Ligne 3',  [D.BL[0], D.BL[1], null, D.BC[0], D.BC[1], null, D.BR[0], D.BR[1]]],
+    ['Ligne 4',  [D.BL[3], D.BL[2], null, D.BC[3], D.BC[2], null, D.BR[3], D.BR[2]]],
+  ];
+  document.getElementById('rows').innerHTML = rows.map(([lab, it]) =>
+    `<div class="row"><span class="lab">${lab}</span>${it.map(x => x === null ? '<span class="sep"></span>' : span(x)).join('')}</div>`).join('');
+  const order = [259, 281, 349, 11, 79, 101, 169, 191];
+  document.getElementById('petals').innerHTML = Object.keys(BIG).map(cid =>
+    `<div class="row"><span class="lab">${cid === 'G' ? 'Gauche' : 'Droite'}</span>${order.map(a => span(state.petals[cid + a])).join('')}</div>`).join('');
+  let tot = 0, up = 0;
+  for (const q of Object.values(state.discs)) for (const it of q) { tot++; if (norm(it.rot) === 0) up++; }
+  for (const it of Object.values(state.petals)) if (it.l) { tot++; if (norm(it.rot) === 0) up++; }
+  document.getElementById('uprightCount').textContent = `${up} / ${tot}` + (up === tot ? ' 🎉' : '');
+}
+
+// ---------- évènements ----------
+function svgPoint(evt) {
+  const pt = svg.createSVGPoint(); pt.x = evt.clientX; pt.y = evt.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+function handleBoard(evt, ccw) {
+  if (evt.target.closest('.bigHandle')) return;
+  const dir = (ccw || evt.shiftKey) ? -1 : 1;
+  const disc = evt.target.closest('[data-disc]');
+  if (disc) { requestMove({ kind: 'disc', id: disc.getAttribute('data-disc'), dir }); return; }
+  const petal = evt.target.closest('[data-petal]');
+  if (petal) { requestMove({ kind: 'big', id: petal.getAttribute('data-petal')[0], dir }); return; }
+  const p = svgPoint(evt);
+  let best = null, bd = Infinity;
+  for (const [cid, c] of Object.entries(BIG)) {
+    const d = Math.hypot(p.x - c.cx, p.y - c.cy);
+    if (d <= R && d < bd) { bd = d; best = cid; }
+  }
+  if (best) requestMove({ kind: 'big', id: best, dir });
+}
+svg.addEventListener('click', e => handleBoard(e, false));
+svg.addEventListener('contextmenu', e => { e.preventDefault(); handleBoard(e, true); });
+document.getElementById('btnReset').onclick = reset;
+document.getElementById('btnUndo').onclick = undo;
+['chkUpright', 'chkHL'].forEach(id => document.getElementById(id).addEventListener('change', render));
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); } });
+
+buildStatic();
+svg.appendChild(dyn);
+svg.appendChild(handles);
+buildHandles();
+render();
+</script>
+</body>
+</html>
