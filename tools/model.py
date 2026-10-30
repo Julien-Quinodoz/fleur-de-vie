@@ -23,3 +23,17 @@ for i in range(-2,5,2):
     if (i,j) in [(0,0),(2,0)]: continue
     d=min(math.hypot(i,j),math.hypot(i-2,j))
     if d<4-1e-9: circles.append((f'A{i},{j}','arc-R',*P(i,j),2*h,False))
+# Arcs de symétrie (absents de l'artwork) : pour que CHAQUE cercle rotatif (grands, disques, moyens,
+# latéraux, central) ait un découpage intérieur invariant par 90°, le motif doit être invariant par
+# rotation de 90° autour de tout point du réseau. Une rotation autour d'un point (impair+pair) échange
+# les points (pair,pair) et (impair,impair) : il faut donc aussi des cercles de rayon 2h aux points
+# (impair,impair) et des cercles de rayon « disque » aux points (pair,pair). Les 24 sont nécessaires
+# (retirer n'importe lequel casse l'exactitude d'au moins un cercle).
+def _meets_board(cx, cy, r):
+  return any(math.hypot(cx-gx, cy-gy) < 2*h + r - 1e-6 for gx, gy in (P(0,0), P(2,0)))
+for i in range(-3,6):
+  for j in range(-3,4):
+    if i%2 and j%2 and _meets_board(*P(i,j), 2*h) and math.hypot(*[a-b for a,b in zip(P(i,j),P(0,0))])>1e-9:
+      circles.append((f'S{i},{j}','arc-sym',*P(i,j),2*h,False))
+    if not i%2 and not j%2 and _meets_board(*P(i,j), (2-math.sqrt(2))*h):
+      circles.append((f's{i},{j}','arc-sym',*P(i,j),(2-math.sqrt(2))*h,False))
