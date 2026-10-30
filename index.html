@@ -3,46 +3,112 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Machine 10 – Les disques à lettres</title>
+<title>Énigme 10 – Les disques à lettres</title>
+<link rel="preload" as="image" href="assets/enigme10.webp">
 <style>
-  :root { --bg:#f6efe6; --ink:#3b2412; --accent:#b4561a; --panel:#fffaf3; }
+  :root {
+    --copper:#b8692e; --copper-d:#7a3d16; --brass:#d9a441; --brass-l:#f4d58a; --brass-d:#8a6420;
+    --ink:#2a1a0c; --parch:#efdcb4; --parch-d:#cfae7a; --teal:#5fd3d0;
+    --serif: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, "Times New Roman", serif;
+    --mono: "Courier New", Courier, "Nimbus Mono PS", monospace;
+  }
   * { box-sizing: border-box; }
-  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
-  header { padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; border-bottom:1px solid #e3d3bf; background:#fbf4ea; }
-  header h1 { font-size:18px; margin:0 16px 0 0; }
-  button { font:inherit; padding:7px 14px; border-radius:8px; border:1px solid #c9a985; background:#fff; color:var(--ink); cursor:pointer; }
-  button:hover { background:#f3e3cf; }
-  button:disabled { opacity:.45; cursor:default; }
-  label.tog { display:flex; align-items:center; gap:6px; font-size:14px; user-select:none; cursor:pointer; }
-  .counter { font-weight:600; padding:6px 12px; border-radius:8px; background:#3b2412; color:#fff; }
-  main { display:flex; flex-wrap:wrap; gap:16px; padding:16px; align-items:flex-start; }
-  #stage { flex: 1 1 640px; min-width:320px; max-width:1000px; }
-  #stage svg { width:100%; height:auto; display:block; touch-action: manipulation; }
-  aside { flex: 0 1 340px; background:var(--panel); border:1px solid #e3d3bf; border-radius:12px; padding:14px 16px; font-size:14px; }
-  aside h2 { font-size:15px; margin:14px 0 6px; }
+  html, body { margin:0; min-height:100%; }
+  body {
+    font-family: var(--serif); color: var(--ink);
+    background:
+      radial-gradient(ellipse at 50% 30%, rgba(184,105,46,.25), transparent 60%),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.05) 0 2px, transparent 2px 7px),
+      linear-gradient(160deg, #3a2414, #1c110a 70%);
+    background-attachment: fixed;
+  }
+  header {
+    display:flex; flex-wrap:wrap; gap:10px 12px; align-items:center; justify-content:center;
+    padding:10px 14px; position:sticky; top:0; z-index:5;
+    background: linear-gradient(180deg, #5a3519, #3a2111);
+    border-bottom: 4px solid transparent;
+    border-image: linear-gradient(90deg, var(--copper-d), var(--copper), #e6a066, var(--copper), var(--copper-d)) 1;
+    box-shadow: 0 4px 14px rgba(0,0,0,.5);
+  }
+  header h1 {
+    margin:0 8px 0 0; font-size:20px; letter-spacing:1px; font-weight:700;
+    color: var(--brass-l); text-shadow: 0 1px 0 #000, 0 0 8px rgba(217,164,65,.5);
+  }
+  .plate, button {
+    font-family: var(--serif); font-size:15px; font-weight:700; color:#3a2408; cursor:pointer;
+    padding:7px 16px 7px 20px; border-radius:6px; position:relative;
+    border:1px solid var(--brass-d);
+    background: linear-gradient(180deg, var(--brass-l) 0%, var(--brass) 45%, #b78226 55%, #e3b65a 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 3px rgba(0,0,0,.25), 0 2px 4px rgba(0,0,0,.5);
+    text-shadow: 0 1px 0 rgba(255,240,200,.7);
+  }
+  .plate::before, .plate::after, button::before, button::after {
+    content:""; position:absolute; top:50%; width:5px; height:5px; margin-top:-2.5px; border-radius:50%;
+    background: radial-gradient(circle at 35% 35%, #fff2c4, #7a5418 70%);
+    box-shadow: 0 0 0 1px rgba(0,0,0,.25);
+  }
+  .plate::before, button::before { left:6px; }
+  .plate::after, button::after { right:6px; }
+  button { padding-right:20px; }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: translateY(1px); box-shadow: inset 0 2px 4px rgba(0,0,0,.35); }
+  button:disabled { filter: grayscale(.6) brightness(.8); cursor:default; }
+  .plate { cursor:default; padding-right:20px; }
+  .plate b { font-family: var(--mono); font-size:17px; }
+  label.tog { display:flex; align-items:center; gap:6px; font-size:14px; color: var(--parch); user-select:none; cursor:pointer; }
+  label.tog input { accent-color: var(--brass); width:16px; height:16px; }
+  main { display:flex; flex-wrap:wrap; gap:16px; padding:14px; align-items:flex-start; justify-content:center; }
+  #stage { flex: 1 1 640px; min-width:280px; max-width:980px; }
+  #stage svg { width:100%; height:auto; display:block; touch-action: manipulation; filter: drop-shadow(0 8px 18px rgba(0,0,0,.55)); }
+  aside {
+    flex: 0 1 330px; min-width:260px; padding:18px 20px; font-size:14px; position:relative;
+    background:
+      radial-gradient(ellipse at 20% 10%, rgba(255,255,255,.35), transparent 50%),
+      radial-gradient(ellipse at 80% 90%, rgba(120,70,20,.25), transparent 55%),
+      linear-gradient(135deg, #f3e2bd, var(--parch) 40%, #e2c690);
+    border-radius:4px 10px 6px 12px;
+    box-shadow: inset 0 0 30px rgba(120,70,20,.45), 0 6px 18px rgba(0,0,0,.55);
+    border:1px solid #b08850;
+  }
+  aside h2 { font-size:16px; margin:14px 0 6px; font-variant: small-caps; letter-spacing:.5px; color:#5a3315; border-bottom:1px dashed rgba(90,51,21,.4); padding-bottom:2px; }
   aside h2:first-child { margin-top:0; }
-  .row { font-family: "Courier New", monospace; font-size:22px; letter-spacing:2px; margin:3px 0; display:flex; gap:2px; align-items:center; }
+  .row { font-family: var(--mono); font-size:22px; margin:3px 0; display:flex; flex-wrap:wrap; gap:2px; align-items:center; }
   .row .sep { width:10px; }
-  .row .lab { font-family: system-ui, sans-serif; font-size:11px; color:#8a6a4c; width:62px; letter-spacing:0; }
-  .lt { display:inline-block; width:22px; text-align:center; font-weight:700; transition: transform .3s; }
-  .lt.up { color:#2d7a2d; }
-  .lt.empty { color:#c7b29a; }
-  .hint { color:#7a5c40; font-size:12.5px; line-height:1.45; }
+  .row .lab { font-family: var(--serif); font-style:italic; font-size:12px; color:#7a5530; width:58px; }
+  .lt { display:inline-block; width:22px; text-align:center; font-weight:700; transition: transform .3s; border-radius:3px; }
+  .lt.up { color:#0f6f6c; text-shadow: 0 0 4px rgba(95,211,208,.6); }
+  .lt.empty { color:#b39a72; }
+  #groups .lt { width:19px; font-size:18px; }
+  #groups .lab { width:54px; }
+  .lt.c-grey { background:rgba(98,81,63,.35); }
+  .lt.c-orange { background:rgba(230,146,1,.45); }
+  .lt.c-dark { background:rgba(77,32,0,.35); }
+  .eggs { display:flex; gap:10px; align-items:center; margin:4px 0 2px; font-family: var(--mono); font-size:13px; }
+  .egg { width:18px; height:24px; border-radius:50% 50% 50% 50% / 60% 60% 40% 40%; display:inline-block; box-shadow: inset -3px -3px 5px rgba(0,0,0,.3); vertical-align:middle; }
+  .hint { color:#4e3218; font-size:13px; line-height:1.5; }
   .piece { cursor:pointer; }
-  .letter { font-family: "Trebuchet MS", "DejaVu Sans", Verdana, sans-serif; font-weight:700; font-size:40px; fill:#4a2a12; pointer-events:none;
-            paint-order: stroke; stroke:#f7d8b0; stroke-width:1.2px; }
-  .letter.upHL { fill:#1f6e1f; }
+  .letter { font-family: "Trebuchet MS", "DejaVu Sans", Verdana, sans-serif; font-weight:700; font-size:40px; fill:#24150a; pointer-events:none;
+            paint-order: stroke; stroke:rgba(255,226,170,.55); stroke-width:1.4px; }
+  .letter.onDark { fill:#f3dcae; stroke:rgba(20,8,0,.7); }
+  .letter.upHL { fill:#0d4f4d; stroke:#9ff3ef; stroke-width:2.5px; }
   .bigHandle { cursor:pointer; }
-  .bigHandle:hover circle { fill:#f3e3cf; }
-  kbd { background:#eee; border:1px solid #ccc; border-radius:3px; padding:0 4px; font-size:12px; }
+  .bigHandle:hover circle.knob { filter: brightness(1.15); }
+  @media (max-width: 700px) {
+    header { position:static; gap:8px; }
+    header h1 { font-size:17px; width:100%; text-align:center; margin:0; }
+    label.tog { font-size:12.5px; }
+    .plate, button { font-size:14px; padding:6px 14px 6px 18px; }
+    main { padding:6px; gap:10px; }
+    aside { flex-basis:100%; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>⚙️ Machine 10</h1>
-  <button id="btnReset" title="Revenir à l'état de la photo">Réinitialiser</button>
+  <h1>⚙ Énigme 10</h1>
+  <button id="btnReset" title="Revenir à l'état de départ">Réinitialiser</button>
   <button id="btnUndo" title="Annuler le dernier mouvement (Ctrl+Z)">Annuler</button>
-  <span class="counter">Coups : <span id="moves">0</span></span>
+  <span class="plate">Coups : <b id="moves">0</b></span>
   <label class="tog"><input type="checkbox" id="chkUpright"> Lettres toujours droites</label>
   <label class="tog"><input type="checkbox" id="chkHL" checked> Surligner les lettres à l'endroit</label>
   <label class="tog"><input type="checkbox" id="chkBig" checked> Grands cercles rotatifs</label>
@@ -50,6 +116,11 @@
 <main>
   <div id="stage"></div>
   <aside>
+    <h2>Les trois œufs</h2>
+    <div class="eggs"><span class="egg" style="background:#62513f"></span><span id="cnt-grey"></span>
+      <span class="egg" style="background:#e69201"></span><span id="cnt-orange"></span>
+      <span class="egg" style="background:#4d2000"></span><span id="cnt-dark"></span></div>
+    <div id="groups"></div>
     <h2>Lecture des disques (ligne par ligne)</h2>
     <div id="rows"></div>
     <h2>Pétales (sens horaire, depuis le haut)</h2>
@@ -58,9 +129,8 @@
     <p class="hint">
       <b>Clic</b> sur un petit disque : rotation de 90° (sens horaire).<br>
       <b>Maj+clic</b> ou <b>clic droit</b> : sens inverse.<br>
-      <b>Clic</b> sur un pétale ou une zone libre d'un grand cercle (ou sur les flèches ↻ ↺) : le grand cercle tourne de 90° en emportant ses 4 disques et ses pétales. Les disques du milieu sont partagés entre les deux grands cercles.<br>
-      <b>Ctrl+Z</b> : annuler.<br><br>
-      Indice : l'orientation des lettres semble être la clé — on cherche sans doute la position où toutes les lettres sont à l'endroit (en vert).
+      <b>Clic</b> sur un pétale ou une zone libre d'un grand cercle (ou sur les engrenages ↻ ↺) : le grand cercle tourne de 90° en emportant ses 4 disques et ses pétales. Les deux disques du milieu sont partagés.<br>
+      <b>Ctrl+Z</b> : annuler.
     </p>
   </aside>
 </main>
@@ -70,10 +140,12 @@
    CONFIGURATION – état de la photo.  Corrige ici une lettre si besoin.
    rot   = rotation de la lettre en degrés (sens horaire), 0 = à l'endroit,
            90 = couchée vers la droite, 180 = à l'envers, -90 = couchée vers la gauche
-   shade = 'light' (bois clair), 'grey' (brun-gris), 'orange' (orange foncé)
+   shade = voir 'Couleurs' ci-dessous ('grey', 'orange', 'dark', 'plain')
    ===================================================================== */
 const CONFIG = {
-  board: { width: 1024, height: 1000 },
+  // Image de fond (cadre steampunk « Énigme 10 ») et calage du plateau SVG dessus :
+  // coordonnées image = coordonnées plateau × scale + (tx, ty)
+  background: { src: 'assets/enigme10.webp', width: 1476, height: 1453, tx: 92.6, ty: 112.5, scale: 1.176 },
   bigRadius: 335,
   discRadius: 95,
   animMs: 420,
@@ -82,28 +154,31 @@ const CONFIG = {
     G: { name: 'Cercle gauche', cx: 343, cy: 497, discSlots: ['TL', 'TC', 'BC', 'BL'] },
     D: { name: 'Cercle droit',  cx: 678, cy: 497, discSlots: ['TC', 'TR', 'BR', 'BC'] },
   },
+  // Couleurs (les 3 œufs du parchemin + le bois nu) :
+  //   'grey' = gris-brun, 'orange' = orange doré, 'dark' = brun foncé, 'plain' = bois nu
   // Les 6 petits disques. Quadrants dans l'ordre : [haut-gauche, haut-droite, bas-droite, bas-gauche]
   discs: {
-    TL: [ {l:'P', rot:0,   shade:'grey'},  {l:'U', rot:180, shade:'grey'},  {l:'M', rot:180, shade:'light'}, {l:'D', rot:180, shade:'light'} ],
-    TC: [ {l:'R', rot:0,   shade:'grey'},  {l:'N', rot:90,  shade:'grey'},  {l:'E', rot:180, shade:'orange'},{l:'S', rot:0,   shade:'orange'} ],
-    TR: [ {l:'T', rot:0,   shade:'orange'},{l:'E', rot:0,   shade:'orange'},{l:'E', rot:90,  shade:'light'}, {l:'O', rot:90,  shade:'light'} ],
-    BL: [ {l:'F', rot:90,  shade:'light'}, {l:'P', rot:0,   shade:'grey'},  {l:'G', rot:180, shade:'light'}, {l:'E', rot:180, shade:'light'} ],
-    BC: [ {l:'O', rot:90,  shade:'grey'},  {l:'U', rot:0,   shade:'grey'},  {l:'N', rot:0,   shade:'orange'},{l:'A', rot:180, shade:'orange'} ],
-    BR: [ {l:'R', rot:0,   shade:'light'}, {l:'L', rot:0,   shade:'light'}, {l:'R', rot:0,   shade:'light'}, {l:'O', rot:90,  shade:'light'} ],
+    TL: [ {l:'P', rot:0,   shade:'grey'},  {l:'U', rot:180, shade:'plain'}, {l:'M', rot:180, shade:'orange'},{l:'D', rot:180, shade:'orange'} ],
+    TC: [ {l:'R', rot:0,   shade:'grey'},  {l:'N', rot:90,  shade:'grey'},  {l:'E', rot:180, shade:'dark'},  {l:'S', rot:0,   shade:'dark'} ],
+    TR: [ {l:'T', rot:0,   shade:'dark'},  {l:'E', rot:0,   shade:'dark'},  {l:'E', rot:90,  shade:'plain'}, {l:'O', rot:90,  shade:'orange'} ],
+    BL: [ {l:'F', rot:90,  shade:'plain'}, {l:'P', rot:0,   shade:'grey'},  {l:'G', rot:180, shade:'orange'},{l:'E', rot:180, shade:'orange'} ],
+    BC: [ {l:'O', rot:90,  shade:'grey'},  {l:'U', rot:0,   shade:'grey'},  {l:'N', rot:0,   shade:'dark'},  {l:'A', rot:180, shade:'dark'} ],
+    BR: [ {l:'R', rot:0,   shade:'plain'}, {l:'L', rot:0,   shade:'plain'}, {l:'R', rot:0,   shade:'orange'},{l:'O', rot:90,  shade:'plain'} ],
   },
   // Pétales : 8 emplacements par grand cercle, angle écran (0 = droite, 90 = bas, 180 = gauche, 270 = haut).
   // l:'' = pétale sans lettre.
   petals: {
     G259: {l:'A', rot:-90, shade:'grey'},   G281: {l:'S', rot:-90, shade:'grey'},
-    G349: {l:'',  rot:0,   shade:'light'},  G11:  {l:'Q', rot:90,  shade:'grey'},
-    G79:  {l:'D', rot:0,   shade:'orange'}, G101: {l:'I', rot:0,   shade:'light'},
-    G169: {l:'T', rot:90,  shade:'grey'},   G191: {l:'',  rot:0,   shade:'light'},
-    D259: {l:'O', rot:90,  shade:'orange'}, D281: {l:'I', rot:90,  shade:'orange'},
-    D349: {l:'E', rot:-90, shade:'light'},  D11:  {l:'V', rot:90,  shade:'orange'},
-    D79:  {l:'N', rot:90,  shade:'light'},  D101: {l:'U', rot:-90, shade:'light'},
-    D169: {l:'',  rot:0,   shade:'light'},  D191: {l:'',  rot:0,   shade:'light'},
+    G349: {l:'',  rot:0,   shade:'plain'},  G11:  {l:'Q', rot:90,  shade:'grey'},
+    G79:  {l:'D', rot:0,   shade:'dark'},   G101: {l:'I', rot:0,   shade:'orange'},
+    G169: {l:'T', rot:90,  shade:'grey'},   G191: {l:'',  rot:0,   shade:'plain'},
+    D259: {l:'O', rot:90,  shade:'dark'},   D281: {l:'I', rot:90,  shade:'dark'},
+    D349: {l:'E', rot:-90, shade:'orange'}, D11:  {l:'V', rot:90,  shade:'dark'},
+    D79:  {l:'N', rot:90,  shade:'orange'}, D101: {l:'U', rot:-90, shade:'orange'},
+    D169: {l:'',  rot:0,   shade:'plain'},  D191: {l:'',  rot:0,   shade:'plain'},
   },
-  shades: { light:'#efc394', grey:'#8e735c', orange:'#c35a17' },
+  shades: { plain:'#9a7552', grey:'#62513f', orange:'#e69201', dark:'#4d2000' },
+  shadeNames: { grey:'gris-brun', orange:'orange doré', dark:'brun foncé', plain:'bois nu' },
 };
 /* ===================================================================== */
 
@@ -149,7 +224,10 @@ function petalGeom(cid, ang) {
 // ---------- dessin ----------
 const stage = document.getElementById('stage');
 const svg = document.createElementNS(SVGNS, 'svg');
-svg.setAttribute('viewBox', `0 60 ${CONFIG.board.width} ${CONFIG.board.height - 120}`);
+const BG = CONFIG.background;
+svg.setAttribute('viewBox', `0 0 ${BG.width} ${BG.height}`);
+svg.setAttribute('role', 'img');
+svg.setAttribute('aria-label', 'Énigme 10 : plateau à disques rotatifs');
 stage.appendChild(svg);
 
 function el(tag, attrs = {}, parent) {
@@ -159,19 +237,22 @@ function el(tag, attrs = {}, parent) {
   return e;
 }
 
+let boardG;
 function buildStatic() {
   const defs = el('defs', {}, svg);
+  el('image', { href: BG.src, x: 0, y: 0, width: BG.width, height: BG.height, 'pointer-events': 'none' }, svg);
+  boardG = el('g', { transform: `translate(${BG.tx} ${BG.ty}) scale(${BG.scale})` }, svg);
   // anneaux de bois
   const g1 = el('radialGradient', { id: 'rings', cx: '0.5', cy: '0.5', r: '0.035', spreadMethod: 'repeat' }, defs);
   el('stop', { offset: '0', 'stop-color': '#000', 'stop-opacity': '0' }, g1);
   el('stop', { offset: '0.82', 'stop-color': '#000', 'stop-opacity': '0' }, g1);
-  el('stop', { offset: '0.92', 'stop-color': '#5a2a08', 'stop-opacity': '0.16' }, g1);
+  el('stop', { offset: '0.92', 'stop-color': '#1a0c02', 'stop-opacity': '0.22' }, g1);
   el('stop', { offset: '1', 'stop-color': '#000', 'stop-opacity': '0' }, g1);
   const g2 = el('radialGradient', { id: 'warm', cx: '0.5', cy: '0.5', r: '0.6' }, defs);
   el('stop', { offset: '0', 'stop-color': '#f8dcb8' }, g2);
   el('stop', { offset: '1', 'stop-color': '#e3a46b' }, g2);
   const f = el('filter', { id: 'engrave', x: '-20%', y: '-20%', width: '140%', height: '140%' }, defs);
-  el('feDropShadow', { dx: '1.2', dy: '1.6', stdDeviation: '0.8', 'flood-color': '#fff1dc', 'flood-opacity': '0.9' }, f);
+  el('feDropShadow', { dx: '1.2', dy: '1.6', stdDeviation: '0.8', 'flood-color': '#ffe3b0', 'flood-opacity': '0.45' }, f);
   const sh = el('filter', { id: 'shadow', x: '-10%', y: '-10%', width: '120%', height: '120%' }, defs);
   el('feDropShadow', { dx: '0', dy: '4', stdDeviation: '6', 'flood-color': '#5a2a08', 'flood-opacity': '0.35' }, sh);
   for (const [cid, c] of Object.entries(BIG)) {
@@ -179,23 +260,14 @@ function buildStatic() {
     el('circle', { cx: c.cx, cy: c.cy, r: R }, cp);
   }
 
-  // planche (forme irrégulière)
-  let pts = [];
-  for (let i = 0; i <= 72; i++) {
-    const a = rad(i * 5);
-    const wob = 1 + 0.025 * Math.sin(i * 1.7) + 0.018 * Math.cos(i * 3.1);
-    pts.push([510 + 505 * Math.cos(a) * wob, 500 + 360 * Math.sin(a) * wob]);
-  }
-  el('path', { d: 'M' + pts.map(p => p.join(',')).join(' L') + ' Z', fill: '#f4d6b2', filter: 'url(#shadow)' }, svg);
-
   for (const [cid, c] of Object.entries(BIG)) {
-    el('circle', { cx: c.cx, cy: c.cy, r: R, fill: 'url(#warm)', stroke: '#2b1708', 'stroke-width': 3, 'data-big': cid, class: 'bigbg' }, svg);
+    el('circle', { cx: c.cx, cy: c.cy, r: R, fill: CONFIG.shades.plain, stroke: '#1a0e05', 'stroke-width': 3, 'data-big': cid, class: 'bigbg' }, boardG);
   }
   for (const [cid, c] of Object.entries(BIG)) {
-    const ring = el('circle', { cx: c.cx, cy: c.cy, r: R, fill: 'url(#rings)', 'pointer-events': 'none' }, svg);
+    el('circle', { cx: c.cx, cy: c.cy, r: R, fill: 'url(#rings)', 'pointer-events': 'none' }, boardG);
   }
   // arcs décoratifs (motif symétrique à 90°, donc inchangé par les rotations)
-  const deco = el('g', { 'pointer-events': 'none', fill: 'none', stroke: '#2b1708', 'stroke-width': 1.6, opacity: 0.55 }, svg);
+  const deco = el('g', { 'pointer-events': 'none', fill: 'none', stroke: '#1a0e05', 'stroke-width': 1.6, opacity: 0.6 }, boardG);
   for (const [cid, c] of Object.entries(BIG)) {
     const g = el('g', { 'clip-path': `url(#clip${cid})` }, deco);
     for (let k = 0; k < 8; k++) {
@@ -208,7 +280,7 @@ function buildStatic() {
     }
   }
   for (const [cid, c] of Object.entries(BIG)) {
-    el('circle', { cx: c.cx, cy: c.cy, r: R, fill: 'none', stroke: '#2b1708', 'stroke-width': 3.5, 'pointer-events': 'none' }, svg);
+    el('circle', { cx: c.cx, cy: c.cy, r: R, fill: 'none', stroke: '#1a0e05', 'stroke-width': 3.5, 'pointer-events': 'none' }, boardG);
   }
 }
 
@@ -220,7 +292,7 @@ function letterEl(parent, x, y, item, animAngle) {
   const upright = document.getElementById('chkUpright').checked;
   const hl = document.getElementById('chkHL').checked && norm(item.rot) === 0;
   const r = upright ? -animAngle : item.rot;
-  const t = el('text', { x, y, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'letter' + (hl ? ' upHL' : ''),
+  const t = el('text', { x, y, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'letter' + (hl ? ' upHL' : (item.shade === 'dark' || item.shade === 'grey' ? ' onDark' : '')),
     transform: `rotate(${r} ${x} ${y})`, filter: 'url(#engrave)' }, parent);
   t.textContent = item.l;
 }
@@ -254,8 +326,8 @@ function render() {
       const g = el('g', { class: 'piece', 'data-petal': id }, dyn);
       if (a && pv) g.setAttribute('transform', `rotate(${a} ${pv.x} ${pv.y})`);
       const geo = petalGeom(cid, ang);
-      el('path', { d: geo.d, fill: CONFIG.shades[item.shade] || CONFIG.shades.light, 'fill-opacity': item.shade === 'light' ? 0.55 : 0.85,
-        stroke: '#2b1708', 'stroke-width': 2.2 }, g);
+      el('path', { d: geo.d, fill: CONFIG.shades[item.shade] || CONFIG.shades.plain,
+        stroke: '#1a0e05', 'stroke-width': 2.2 }, g);
       el('path', { d: geo.d, fill: 'url(#rings)', 'pointer-events': 'none' }, g);
       letterEl(g, geo.tx, geo.ty, item, a);
     }
@@ -266,17 +338,17 @@ function render() {
     const a = moving('disc', sid), pv = pivot();
     const g = el('g', { class: 'piece', 'data-disc': sid }, dyn);
     if (a && pv) g.setAttribute('transform', `rotate(${a} ${pv.x} ${pv.y})`);
-    el('circle', { cx: p.x, cy: p.y, r: RD + 3, fill: '#2b1708', opacity: 0.25 }, g);
+    el('circle', { cx: p.x, cy: p.y, r: RD + 3, fill: '#1a0e05', opacity: 0.35 }, g);
     quads.forEach((q, i) => {
       const a0 = 180 + 90 * i, a1 = a0 + 90;
       const e0 = { x: p.x + RD * Math.cos(rad(a0)), y: p.y + RD * Math.sin(rad(a0)) };
       const e1 = { x: p.x + RD * Math.cos(rad(a1)), y: p.y + RD * Math.sin(rad(a1)) };
       const d = `M${p.x},${p.y} L${e0.x},${e0.y} A${RD},${RD} 0 0 1 ${e1.x},${e1.y} Z`;
-      el('path', { d, fill: CONFIG.shades[q.shade] || CONFIG.shades.light, stroke: 'none' }, g);
+      el('path', { d, fill: CONFIG.shades[q.shade] || CONFIG.shades.plain, stroke: 'none' }, g);
       el('path', { d, fill: 'url(#rings)', 'pointer-events': 'none' }, g);
     });
     // séparateurs en lentille + contour
-    const lens = el('g', { fill: 'none', stroke: '#2b1708', 'stroke-width': 2, 'pointer-events': 'none' }, g);
+    const lens = el('g', { fill: 'none', stroke: '#1a0e05', 'stroke-width': 2, 'pointer-events': 'none' }, g);
     const rr = RD * 1.7;
     el('path', { d: `M${p.x},${p.y - RD} A${rr},${rr} 0 0 1 ${p.x},${p.y + RD} A${rr},${rr} 0 0 1 ${p.x},${p.y - RD}` }, lens);
     el('path', { d: `M${p.x - RD},${p.y} A${rr},${rr} 0 0 1 ${p.x + RD},${p.y} A${rr},${rr} 0 0 1 ${p.x - RD},${p.y}` }, lens);
@@ -289,16 +361,33 @@ function render() {
   updatePanel();
 }
 
+function gearPath(cx, cy, rOut, rIn, teeth) {
+  let d = '';
+  for (let i = 0; i < teeth * 2; i++) {
+    const r = i % 2 ? rIn : rOut;
+    const a0 = (i / (teeth * 2)) * 2 * Math.PI, a1 = ((i + 1) / (teeth * 2)) * 2 * Math.PI;
+    d += (i ? 'L' : 'M') + (cx + r * Math.cos(a0)) + ',' + (cy + r * Math.sin(a0)) + ' L' + (cx + r * Math.cos(a1)) + ',' + (cy + r * Math.sin(a1)) + ' ';
+  }
+  return d + 'Z';
+}
 function buildHandles() {
+  const defs = svg.querySelector('defs');
+  const gr = el('radialGradient', { id: 'brass', cx: '0.35', cy: '0.3', r: '0.8' }, defs);
+  el('stop', { offset: '0', 'stop-color': '#fff0b8' }, gr);
+  el('stop', { offset: '0.45', 'stop-color': '#d9a441' }, gr);
+  el('stop', { offset: '1', 'stop-color': '#7a5418' }, gr);
   for (const [cid, c] of Object.entries(BIG)) {
-    const y = c.cy + R + 42;
-    [[-1, '↺', -50], [1, '↻', 50]].forEach(([dir, sym, dx]) => {
+    const y = c.cy - R - 44;
+    [[-1, '↺', -58], [1, '↻', 58]].forEach(([dir, sym, dx]) => {
+      const x = c.cx + dx;
       const g = el('g', { class: 'bigHandle' }, handles);
-      el('circle', { cx: c.cx + dx, cy: y, r: 24, fill: '#fffaf3', stroke: '#8a5a32', 'stroke-width': 2 }, g);
-      const t = el('text', { x: c.cx + dx, y: y + 1, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 28, fill: '#3b2412' }, g);
+      el('path', { d: gearPath(x, y, 30, 24, 10), fill: 'url(#brass)', stroke: '#5a3a10', 'stroke-width': 1.5, class: 'knob' }, g);
+      el('circle', { cx: x, cy: y, r: 19, fill: '#3a2111', stroke: '#c8923a', 'stroke-width': 2, class: 'knob' }, g);
+      const t = el('text', { x, y: y + 1, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 26, 'font-weight': 700, fill: '#f4d58a' }, g);
       t.textContent = sym;
       const ti = el('title', {}, g); ti.textContent = c.name + (dir > 0 ? ' – sens horaire' : ' – sens anti-horaire');
       g.addEventListener('click', e => { e.stopPropagation(); requestMove({ kind: 'big', id: cid, dir }); });
+      g.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); });
     });
   }
 }
@@ -373,7 +462,8 @@ function span(item) {
   if (!item || !item.l) return '<span class="lt empty">·</span>';
   const up = norm(item.rot) === 0;
   const r = upright ? 0 : item.rot;
-  return `<span class="lt${up ? ' up' : ''}" style="transform:rotate(${r}deg)">${item.l}</span>`;
+  const cc = item.shade && item.shade !== 'plain' ? ' c-' + item.shade : '';
+  return `<span class="lt${up ? ' up' : ''}${cc}" style="transform:rotate(${r}deg)">${item.l}</span>`;
 }
 function updatePanel() {
   document.getElementById('moves').textContent = history.length;
@@ -390,6 +480,15 @@ function updatePanel() {
   const order = [259, 281, 349, 11, 79, 101, 169, 191];
   document.getElementById('petals').innerHTML = Object.keys(BIG).map(cid =>
     `<div class="row"><span class="lab">${cid === 'G' ? 'Gauche' : 'Droite'}</span>${order.map(a => span(state.petals[cid + a])).join('')}</div>`).join('');
+  // groupes de couleur (œufs)
+  const all = [];
+  for (const [sid, q] of Object.entries(state.discs)) q.forEach(it => all.push(it));
+  for (const it of Object.values(state.petals)) if (it.l) all.push(it);
+  const groups = { grey: [], orange: [], dark: [], plain: [] };
+  for (const it of all) (groups[it.shade] || groups.plain).push(it);
+  for (const k of ['grey', 'orange', 'dark']) document.getElementById('cnt-' + k).textContent = '× ' + groups[k].length;
+  document.getElementById('groups').innerHTML = ['grey', 'orange', 'dark', 'plain'].map(k =>
+    `<div class="row"><span class="lab">${CONFIG.shadeNames[k]}</span>${groups[k].map(span).join('')}</div>`).join('');
   let tot = 0, up = 0;
   for (const q of Object.values(state.discs)) for (const it of q) { tot++; if (norm(it.rot) === 0) up++; }
   for (const it of Object.values(state.petals)) if (it.l) { tot++; if (norm(it.rot) === 0) up++; }
@@ -399,7 +498,7 @@ function updatePanel() {
 // ---------- évènements ----------
 function svgPoint(evt) {
   const pt = svg.createSVGPoint(); pt.x = evt.clientX; pt.y = evt.clientY;
-  return pt.matrixTransform(svg.getScreenCTM().inverse());
+  return pt.matrixTransform(boardG.getScreenCTM().inverse());
 }
 function handleBoard(evt, ccw) {
   if (evt.target.closest('.bigHandle')) return;
@@ -424,8 +523,8 @@ document.getElementById('btnUndo').onclick = undo;
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); } });
 
 buildStatic();
-svg.appendChild(dyn);
-svg.appendChild(handles);
+boardG.appendChild(dyn);
+boardG.appendChild(handles);
 buildHandles();
 render();
 </script>
